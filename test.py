@@ -2,6 +2,7 @@ import argparse
 import joblib
 import numpy as np
 from keras.models import model_from_json
+from model import build_DUA_2
 
 def evaluate_recall(y, k=1):
     num_examples = float(len(y))
@@ -21,15 +22,18 @@ def main():
     print('load data')
     test_data = joblib.load(args.test_data)
 
-    json_string = open(args.model_name + '.json').read()
-    model = model_from_json(json_string)
+    # json_string = open(args.model_name + '.json').read()
+    # model = model_from_json(json_string)
+
+    model = build_DUA_2(max_turn=10, maxlen=50, word_dim=200, sent_dim=200, session_hidden_size=50,
+              num_words=50000, embedding_matrix=None)
     model.load_weights(args.model_name + '.h5')
 
     context = np.array(test_data['context'])
     response = np.array(test_data['response'])
 
     print('predict')
-    y = model.predict([context, response], batch_size=1000)
+    y = model.predict([context, response], batch_size=50)
     y = np.array(y).reshape(50000, 10)
     y = [np.argsort(y[i], axis=0)[::-1] for i in range(len(y))]
     for n in [1, 2, 5]:

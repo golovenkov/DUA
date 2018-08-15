@@ -6,3 +6,6 @@ ubuntu_data/
 *.json
 .python-version
 .idea
+__pycache__
+trained
+*.bak1
