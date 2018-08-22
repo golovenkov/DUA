@@ -9,3 +9,4 @@ ubuntu_data/
 __pycache__
 trained
 *.bak1
+info

@@ -1,5 +1,6 @@
 import argparse
 import numpy as np
+np.random.seed(42)
 import joblib
 from keras.layers import Dense, Input, Flatten, dot, concatenate, Reshape, Lambda, Concatenate, Multiply, Activation, Add
 from keras.layers import Conv2D, MaxPooling2D, Embedding, GRU
@@ -12,9 +13,24 @@ from keras import backend as K
 import tensorflow as tf
 from keras import initializers
 from model import build_DUA_2, build_DUA_3
+import tensorflow as tf
+tf.set_random_seed(42)
 
 
 def main():
+    # TensorFlow wizardry
+    config = tf.ConfigProto()
+
+    # Don't pre-allocate memory; allocate as-needed
+    config.gpu_options.allow_growth = True
+
+    # # Only allow a total of half the GPU memory to be allocated
+    # config.gpu_options.per_process_gpu_memory_fraction = 0.3
+
+    # Create a session with the above options specified.
+    K.tensorflow_backend.set_session(tf.Session(config=config))
+
+
     psr = argparse.ArgumentParser()
     psr.add_argument('--maxlen', default=50, type=int)
     psr.add_argument('--max_turn', default=10, type=int)
@@ -37,6 +53,9 @@ def main():
 
     # json_string = model.to_json()
     # open(args.model_name + '.json', 'w').write(json_string)
+    model.compile(loss='binary_crossentropy',
+                  optimizer='adam',
+                  metrics=['accuracy'])
 
     print(model.summary())
 
