@@ -627,8 +627,8 @@ def build_DUA_3(max_turn=10, maxlen=50, word_dim=200, sent_dim=200, session_hidd
         exp1 = Lambda(lambda x: expand_tile(x, axis=1))(units)
         exp2 = Lambda(lambda x: expand_tile(x, axis=2))(units)
         units_pairs = Concatenate(axis=3)([exp1, exp2])
-        query = Dense(n_hidden, activation="tanh", kernel_initializer=initializers.glorot_uniform())(units_pairs)
-        attention = Dense(1, activation=softvaxaxis2, kernel_initializer=initializers.glorot_uniform())(query)
+        query = Dense(n_hidden, activation="tanh")(units_pairs)
+        attention = Dense(1, activation=softvaxaxis2)(query)
         attended_units = Lambda(lambda x: K.sum(attention * x, axis=2))(exp1)
         # output = Dense(n_output_features, activation=activation)(attended_units)
 
@@ -660,7 +660,7 @@ def build_DUA_3(max_turn=10, maxlen=50, word_dim=200, sent_dim=200, session_hidd
             [
                 dot(
                     # TODO: K.Dot(u)
-                    [   Dense(sent_dim, use_bias=False, kernel_initializer=initializers.glorot_uniform())(
+                    [   Dense(sent_dim, use_bias=False)(
                             Reshape((1, maxlen, sent_dim))(u[:, turn])
                         ),
                         Reshape((1, maxlen, sent_dim))(r)            # (?, 50, 200) -> (?, 1, 50, 200)
@@ -692,7 +692,7 @@ def build_DUA_3(max_turn=10, maxlen=50, word_dim=200, sent_dim=200, session_hidd
         from keras.layers import concatenate
         return concatenate(
             [
-                Reshape((1, maxlen, sent_dim*2))(additive_self_attention(u[:, turn], n_hidden=sent_dim * 2)) for turn in range(max_turn)
+                Reshape((1, maxlen, sent_dim*2))(additive_self_attention(u[:, turn], n_hidden=sent_dim * 2)) for turn in range(max_turn)  # TODO: sent_dim * 2 ?
             ], axis=1
         )
 
@@ -730,7 +730,7 @@ def build_DUA_3(max_turn=10, maxlen=50, word_dim=200, sent_dim=200, session_hidd
                                 weights=[embedding_matrix],
                                 input_length=maxlen,
                                 trainable=True)
-    sentence2vec = GRU(sent_dim, return_sequences=True, kernel_initializer=initializers.orthogonal())   # GRU for encoding each sentence into a vector
+    sentence2vec = GRU(sent_dim, return_sequences=True)   # GRU for encoding each sentence into a vector
 
     context_word_embedding = TimeDistributed(embedding_layer)(context_input)
     response_word_embedding = embedding_layer(response_input)
@@ -751,7 +751,7 @@ def build_DUA_3(max_turn=10, maxlen=50, word_dim=200, sent_dim=200, session_hidd
     concat_sa_utterance = Lambda(concat_sa_utterance_layer)([fusion_utterance_context, sa_utterance])  # (?,10,50,800)
     concat_sa_response = Lambda(concat_sa_response_layer)([fusion_response_context, sa_response])      # (?, 50, 800)
 
-    att2vec = GRU(sent_dim, return_sequences=True, kernel_initializer=initializers.orthogonal())  # GRU for concatenated fused vectors and self-attended vectors
+    att2vec = GRU(sent_dim, return_sequences=True)  # GRU for concatenated fused vectors and self-attended vectors
 
     matching_att_utterance = TimeDistributed(att2vec)(concat_sa_utterance)
     matching_att_response = att2vec(concat_sa_response)
@@ -767,21 +767,21 @@ def build_DUA_3(max_turn=10, maxlen=50, word_dim=200, sent_dim=200, session_hidd
     conv = TimeDistributed(Conv2D(8, (3, 3), activation='relu', data_format='channels_first', kernel_initializer=initializers.he_normal()))(match_2ch)
     pool = TimeDistributed(MaxPooling2D(pool_size=(3, 3), data_format='channels_first'))(conv)
     flat = TimeDistributed(Flatten())(pool)                      # (?, 10, 2048)
-    flat = Dense(session_hidden_size, activation='tanh', kernel_initializer=initializers.glorot_uniform())(flat)   # (?, 10, 50)
+    flat = Dense(session_hidden_size, activation='tanh')(flat)   # (?, 10, 50)
 
     # 5. Attentive Turns Aggregation
-    lastGRU = GRU(session_hidden_size, return_sequences=True, kernel_initializer=initializers.orthogonal())
+    lastGRU = GRU(session_hidden_size, return_sequences=True)
 
     h = lastGRU(flat)  # h: (?, 10, 50)
 
     # Final Attention
     #########################################
-    W1_layer = Dense(session_hidden_size, input_shape=(max_turn, session_hidden_size), kernel_initializer=initializers.glorot_uniform())(h)
-    W2_layer = Dense(session_hidden_size, input_shape=(max_turn, sent_dim), kernel_initializer=initializers.glorot_uniform())(Lambda(lambda x: x[:, :, -1, :])(matching_att_utterance))
+    W1_layer = Dense(session_hidden_size, input_shape=(max_turn, session_hidden_size))(h)
+    W2_layer = Dense(session_hidden_size, input_shape=(max_turn, sent_dim))(Lambda(lambda x: x[:, :, -1, :])(matching_att_utterance))
     sum_ = Add()([W1_layer, W2_layer])
     v = Activation(tanh)(sum_)  # (?, 10, 50)
 
-    final = Dense(1, input_shape=(max_turn, session_hidden_size), kernel_initializer=initializers.glorot_uniform())(v)  # (?, 10, 1)
+    final = Dense(1, input_shape=(max_turn, session_hidden_size))(v)  # (?, 10, 1)
     weight = Lambda(lambda x: K.squeeze(K.exp(x), axis=-1))(final)
     weight2 = Lambda(lambda x: tf.divide(x, Reshape((1, ))(K.sum(x, axis=1))))(weight)  # (?, 10)
 
@@ -791,7 +791,7 @@ def build_DUA_3(max_turn=10, maxlen=50, word_dim=200, sent_dim=200, session_hidd
     # L = Lambda(additive_attention)([h, matching_att_utterance[:, :, -1, :]])
     #########################################
 
-    output = Dense(1, activation='sigmoid', kernel_initializer=initializers.glorot_uniform())(L)
+    output = Dense(1, activation='sigmoid')(L)
 
     model = Model(inputs=[context_input, response_input], outputs=output)
     # adam = Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.0, amsgrad=False)
